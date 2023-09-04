@@ -1,0 +1,107 @@
+{
+  "data": {
+    "gid": "1205246757978835",
+    "actual_time_minutes": null,
+    "assignee": {
+      "gid": "1202789363018568",
+      "name": "Vivek",
+      "resource_type": "user"
+    },
+    "assignee_status": "inbox",
+    "completed": false,
+    "completed_at": null,
+    "created_at": "2023-08-10T10:37:26.074Z",
+    "custom_fields": [
+      {
+        "gid": "1205044674195955",
+        "enabled": true,
+        "enum_options": [
+          {
+            "gid": "1205044674195956",
+            "color": "green",
+            "enabled": true,
+            "name": "AK - Development",
+            "resource_type": "enum_option"
+          },
+          {
+            "gid": "1205044675546651",
+            "color": "red",
+            "enabled": true,
+            "name": "AK - Authoring",
+            "resource_type": "enum_option"
+          }
+        ],
+        "enum_value": null,
+        "name": "Module",
+        "description": "",
+        "created_by": {
+          "gid": "1205064307097034",
+          "name": "Nikhil",
+          "resource_type": "user"
+        },
+        "display_value": null,
+        "resource_subtype": "enum",
+        "resource_type": "custom_field",
+        "is_formula_field": false,
+        "is_value_read_only": false,
+        "type": "enum"
+      }
+    ],
+    "due_at": null,
+    "due_on": null,
+    "followers": [
+      {
+        "gid": "1205064307097034",
+        "name": "Nikhil",
+        "resource_type": "user"
+      },
+      {
+        "gid": "1202789363018568",
+        "name": "Vivek",
+        "resource_type": "user"
+      }
+    ],
+    "hearted": false,
+    "hearts": [],
+    "liked": false,
+    "likes": [],
+    "memberships": [
+      {
+        "project": {
+          "gid": "1205044674195942",
+          "name": "Platypus Development",
+          "resource_type": "project"
+        },
+        "section": {
+          "gid": "1205044674195943",
+          "name": "Untitled section",
+          "resource_type": "section"
+        }
+      }
+    ],
+    "modified_at": "2023-08-10T10:41:49.548Z",
+    "name": "Test 1",
+    "notes": "",
+    "num_hearts": 0,
+    "num_likes": 0,
+    "parent": null,
+    "permalink_url": "https://app.asana.com/0/1205044674195942/1205246757978835",
+    "projects": [
+      {
+        "gid": "1205044674195942",
+        "name": "Platypus Development",
+        "resource_type": "project"
+      }
+    ],
+    "resource_type": "task",
+    "start_at": null,
+    "start_on": null,
+    "tags": [],
+    "resource_subtype": "default_task",
+    "workspace": {
+      "gid": "1205064321619852",
+      "name": "My workspace",
+      "resource_type": "workspace"
+    }
+  }
+}
