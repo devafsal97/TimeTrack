@@ -17,7 +17,9 @@ const {
   PROJECTS,
 } = require("../constants/constants");
 const { loadAWSSecret } = require("../../config/secreteManagerConfig");
+const logger = require("../logs/winston");
 async function verifyTasks() {
+  logger.log("info", `verify task executed for day ${Date.now().toString()}`);
   let asanaSecret = await loadAWSSecret("timetrack/api/asana");
   let timetaskSecret = await loadAWSSecret("timetrack/api/timetask");
   let taskIDfromDB = await getDocumentIDs();
@@ -41,9 +43,7 @@ async function verifyTasks() {
       id,
       asanaSecret["PRABHATH PANICKER"]
     );
-    console.log(taskDetails);
     let requestData = await createReqData(taskDetails);
-    console.log(requestData, "requestData");
     let response = await postTask(
       requestData,
       timetaskSecret[USER_NAME[requestData.ownerid]]
@@ -53,7 +53,8 @@ async function verifyTasks() {
     requestData.ownerName = USER_NAME[requestData.ownerid];
     requestData.current_tt_worktypeID =
       PROJECTS[taskDetails.data.projects[0].name];
-    console.log(`${requestData.title} Task Created`);
+    logger.log("info", `${requestData.title} Task Created`);
+
     // Add requestData key-value pairs to global_task_manager collection
     const docRef = db.collection("global_task_manager").doc(id);
     await docRef.set({
@@ -77,7 +78,8 @@ async function getDocumentIDs() {
       return taskIDfromDB;
     })
     .catch((error) => {
-      console.error("Error getting documents:", error);
+      logger.log("error", "Error getting documents:");
+      logger.log("error", error);
       return [];
     });
 }
@@ -94,7 +96,8 @@ async function getAlltask(project_gid, token) {
     );
     return response.data.data;
   } catch (error) {
-    console.log(`[ERROR] Error getting all task from asana: ${error}`);
+    logger.log("error", "Error getting all task from asana");
+    logger.log("error", error);
     throw error;
   }
 }
@@ -106,7 +109,6 @@ async function createReqData(taskDetails) {
   requestData.projectid = PROJECTS[taskDetails.data.projects[0].name];
   requestData.title = taskDetails.data.name;
   requestData.dateopen = convertToDateOnly(taskDetails.data.created_at);
-  console.log(taskDetails.data.followers, "taskDetails.followers");
   requestData.ownerid = USER_MAP[taskDetails.data.followers[0].gid];
   requestData.moduleid = 450029;
   if (taskDetails.data.assignee != null) {
@@ -118,7 +120,6 @@ async function createReqData(taskDetails) {
   if (taskDetails.data.due_on != null) {
     requestData.datedue = taskDetails.data.due_on;
   }
-  log(`[Task Name]${requestData.title}`);
   return requestData;
 }
 
@@ -150,8 +151,8 @@ async function postTask(data, apiKey) {
       return response.data; // Return the response data
     })
     .catch((error) => {
-      console.log(error);
-      log(`[ERROR] Error while updating a task : ${error}`);
+      logger.log("error", "Error while updating a task");
+      logger.log("error", error);
     });
 }
 module.exports = {

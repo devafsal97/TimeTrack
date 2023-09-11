@@ -14,111 +14,115 @@ const {
   log,
 } = require("../constants/constants");
 const { loadAWSSecret } = require("../../config/secreteManagerConfig");
+const logger = require("../logs/winston");
 exports.updateTask = async (req, res) => {
-  const requestBody = JSON.stringify(req.body);
-  if (req.header("X-Hook-Secret")) {
-    const xHookSecret = req.header("X-Hook-Secret");
-    const requestUrl = req.url;
+  try {
+    const requestBody = JSON.stringify(req.body);
+    if (req.header("X-Hook-Secret")) {
+      const xHookSecret = req.header("X-Hook-Secret");
+      const requestUrl = req.url;
 
-    fs.readFile(
-      path.join(__dirname, "..", "constants", "sectionUpdateChangeSecret.json"),
-      (err, data) => {
-        if (err) {
-          console.error("Error reading secret file:", err);
-        } else {
-          let secretData = {};
-          if (data.length > 0) {
-            secretData = JSON.parse(data);
-          }
-
-          secretData[requestUrl] = xHookSecret;
-
-          fs.writeFile(
-            path.join(
-              __dirname,
-              "..",
-              "constants",
-              "sectionUpdateChangeSecret.json"
-            ),
-            JSON.stringify(secretData),
-            (err) => {
-              if (err) {
-                console.error("Error writing secret file:", err);
-              } else {
-                console.log("Secret file saved successfully");
-              }
-            }
-          );
-        }
-      }
-    );
-
-    res.setHeader("X-Hook-Secret", xHookSecret);
-    res.sendStatus(200);
-  } else if (req.header("X-Hook-Signature")) {
-    const xHookSignature = req.header("X-Hook-Signature");
-
-    const xHookSecrets = JSON.parse(
-      fs.readFileSync(
+      fs.readFile(
         path.join(
           __dirname,
           "..",
           "constants",
           "sectionUpdateChangeSecret.json"
         ),
-        "utf8"
-      )
-    );
+        (err, data) => {
+          if (err) {
+            logger.log("error", "Error reading secret file:");
+            logger.log("error", err);
+          } else {
+            let secretData = {};
+            if (data.length > 0) {
+              secretData = JSON.parse(data);
+            }
 
-    const xHookSecret = xHookSecrets[req.url];
-    if (xHookSecret) {
-      const calculatedSignature = crypto
-        .createHmac("sha256", xHookSecret)
-        .update(requestBody)
-        .digest("hex");
-      if (calculatedSignature === xHookSignature) {
-        res.sendStatus(200);
-        if (!!req.body.events.length) {
-          let all_events = req.body.events;
-          console.log(all_events, "TaskUpdate");
-          for (i = 0; i <= all_events.length - 1; i++) {
-            let current_event = req.body.events[i];
-            let current_asana_userGid = current_event.user.gid;
-            let current_tt_userGid = USER_MAP[current_asana_userGid];
-            let current_userName = USER_NAME[current_tt_userGid];
-            console.log(current_userName, "current_Update_User");
-            let current_asana_taskGid = current_event.resource.gid;
-            await delay(5000);
-            var occurence = await checkOccurence(current_asana_taskGid);
-            if (occurence) {
-              let asanaSecret = await loadAWSSecret("timetrack/api/asana");
-              let timetaskSecret = await loadAWSSecret(
-                "timetrack/api/timetask"
-              );
-              console.log(
-                "=============Update Trigger By User " +
-                  current_userName +
-                  " ============"
-              );
-              console.log("Task Updated");
-              var changeField = current_event.change.field;
-              let taskDetails = await getTaskDetails(
-                current_asana_taskGid,
-                asanaSecret[current_userName]
-              );
-              console.log(taskDetails, "taskDetails");
-              let updateReq = createReqData(changeField, taskDetails);
-              current_TT_taskID = await getTTID(current_asana_taskGid);
-              putTask(
-                updateReq,
-                current_TT_taskID,
-                timetaskSecret[current_userName]
-              );
+            secretData[requestUrl] = xHookSecret;
+
+            fs.writeFile(
+              path.join(
+                __dirname,
+                "..",
+                "constants",
+                "sectionUpdateChangeSecret.json"
+              ),
+              JSON.stringify(secretData),
+              (err) => {
+                if (err) {
+                  logger.log("error", "Error writing secret file:");
+                  logger.log("error", err);
+                } else {
+                  logger.log("info", "Secret file saved successfully");
+                }
+              }
+            );
+          }
+        }
+      );
+
+      res.setHeader("X-Hook-Secret", xHookSecret);
+      res.sendStatus(200);
+    } else if (req.header("X-Hook-Signature")) {
+      const xHookSignature = req.header("X-Hook-Signature");
+
+      const xHookSecrets = JSON.parse(
+        fs.readFileSync(
+          path.join(
+            __dirname,
+            "..",
+            "constants",
+            "sectionUpdateChangeSecret.json"
+          ),
+          "utf8"
+        )
+      );
+
+      const xHookSecret = xHookSecrets[req.url];
+      if (xHookSecret) {
+        const calculatedSignature = crypto
+          .createHmac("sha256", xHookSecret)
+          .update(requestBody)
+          .digest("hex");
+        if (calculatedSignature === xHookSignature) {
+          res.sendStatus(200);
+          if (!!req.body.events.length) {
+            let all_events = req.body.events;
+            for (i = 0; i <= all_events.length - 1; i++) {
+              let current_event = req.body.events[i];
+              let current_asana_userGid = current_event.user.gid;
+              let current_tt_userGid = USER_MAP[current_asana_userGid];
+              let current_userName = USER_NAME[current_tt_userGid];
+              let current_asana_taskGid = current_event.resource.gid;
+              await delay(5000);
+              var occurence = await checkOccurence(current_asana_taskGid);
+              if (occurence) {
+                let asanaSecret = await loadAWSSecret("timetrack/api/asana");
+                let timetaskSecret = await loadAWSSecret(
+                  "timetrack/api/timetask"
+                );
+                logger.log("info", "Task Updated");
+                var changeField = current_event.change.field;
+                let taskDetails = await getTaskDetails(
+                  current_asana_taskGid,
+                  asanaSecret[current_userName]
+                );
+                let updateReq = createReqData(changeField, taskDetails);
+                current_TT_taskID = await getTTID(current_asana_taskGid);
+                putTask(
+                  updateReq,
+                  current_TT_taskID,
+                  timetaskSecret[current_userName]
+                );
+              }
             }
           }
         }
       }
     }
+  } catch (error) {
+    logger.log("error", error);
   }
 };
 
@@ -140,12 +144,13 @@ function putTask(data, id, apiKey) {
     .request(config)
     .then((response) => {
       console.log("Update Success");
-      log(`[INFO] Task Updation Completed`);
+      logger.log("info", `Task Updation Completed for task with id${id}`);
+
       return response.data; // Return the response data
     })
     .catch((error) => {
-      console.log("Update Error:", error);
-      log(`[ERROR] Error while updating a task : ${error}`);
+      logger.log("info", "Update Error:");
+      logger.log("info", error);
       throw error; // Throw the error to be caught by the caller
     });
 }
@@ -165,34 +170,39 @@ async function getTTID(current_asana_taskid) {
         // Access the TT_taskID value
         return TT_taskID;
       } else {
-        console.log("current_tt_taskID not found in the document.");
+        logger.log("info", "current_tt_taskID not found in the document.");
       }
     } else {
-      console.log("Document does not exist.");
+      logger.log("info", "Document does not exist.");
     }
   } catch (error) {
-    console.log("An error occurred:", error);
+    logger.log("error", error);
   }
 }
 
 function createReqData(changeField, taskDetails) {
-  let changeFieldValue;
-  if (changeField == "assignee") {
-    if (taskDetails.data.assignee != null) {
-      changeFieldValue = USER_MAP[taskDetails.data.assignee.gid];
+  try {
+    let changeFieldValue;
+    if (changeField == "assignee") {
+      if (taskDetails.data.assignee != null) {
+        changeFieldValue = USER_MAP[taskDetails.data.assignee.gid];
+      } else {
+        changeFieldValue = "";
+      }
+    } else if (changeField == "actual_time_minutes") {
+      logger.log("info", "Time Updates");
+      logger.log("info", taskDetails.data);
     } else {
-      changeFieldValue = "";
+      changeFieldValue = taskDetails.data[changeField];
     }
-  } else if (changeField == "actual_time_minutes") {
-    console.log(taskDetails.data, "Time Updates");
-  } else {
-    changeFieldValue = taskDetails.data[changeField];
-  }
 
-  let updateReq = {
-    [UPDATEMAP[changeField]]: changeFieldValue,
-  };
-  return updateReq;
+    let updateReq = {
+      [UPDATEMAP[changeField]]: changeFieldValue,
+    };
+    return updateReq;
+  } catch (error) {
+    logger.log("error", error);
+  }
 }
 
 function delay(ms) {

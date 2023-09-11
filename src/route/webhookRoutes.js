@@ -35,7 +35,7 @@ const updateRoutes = [
   "/updatetask10",
   "/updatetask11",
   "/updatetask12",
-  "/updatetasktest",
+
   // Add more routes as needed
 ];
 
@@ -61,7 +61,8 @@ cretaeRoutes.forEach((route) => {
       // Call your createTask function here
       await webhookCreateController.createTask(req, res);
     } catch (error) {
-      console.error("Error processing task:", error);
+      logger.log("error", "Error processing task:");
+      logger.log("error", error);
     } finally {
       taskProcessingFlags[route] = false;
     }
@@ -86,7 +87,8 @@ updateRoutes.forEach((route) => {
       // Call your createTask function here
       await webhookUpdateController.updateTask(req, res);
     } catch (error) {
-      console.error("Error processing task:", error);
+      logger.log("error", "Error processing task:");
+      logger.log("error", error);
     } finally {
       taskProcessingFlags[route] = false;
     }

@@ -5,6 +5,7 @@ const db = firestore.db;
 const fs = require("fs");
 const path = require("path");
 const { response } = require("express");
+const logger = require("../logs/winston");
 // Constant for status ID
 const STATUS_ID = 279494;
 
@@ -24,6 +25,7 @@ const USER_MAP = {
   1205298958054575: 381489,
   1200213127253276: 325115,
   1200213074641705: 315750,
+  1205325765553622: 315748,
 };
 const USER_NAME = {
   352394: "NIKHIL",
@@ -38,6 +40,7 @@ const USER_NAME = {
   381489: "NOEL JOLLY",
   325115: "PRANAV LARI",
   315750: "PRABHATH PANICKER",
+  315748: "supi@au-ki.com",
 };
 
 const PROJECTS = {
@@ -85,7 +88,8 @@ async function getTaskDetails(id, token) {
     );
     return response.data;
   } catch (error) {
-    log(`[ERROR] Error in getTaskDetails: ${error}`);
+    logger.log("error", "Error in getTaskDetails");
+    logger.log("error", error);
     return 400;
   }
 }
@@ -111,8 +115,8 @@ async function checkOccurence(id) {
       }
     })
     .catch((error) => {
-      console.error("Error getting document:", error);
-      log(`[ERROR] Error getting document from firebase: ${error}`);
+      logger.log("error", "Error getting document");
+      logger.log("error", error);
       return false;
     });
 }
@@ -145,7 +149,8 @@ async function writeLog(message) {
   return new Promise((resolve, reject) => {
     fs.appendFile(logFilePath, logEntry, (err) => {
       if (err) {
-        console.error("Error writing to log file:", err);
+        logger.log("error", "Error writing to log file:");
+        logger.log("error", err);
         reject(err);
       } else {
         resolve();

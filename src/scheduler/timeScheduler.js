@@ -3,14 +3,13 @@ const firestore = require("../services/firestore");
 const db = firestore.db;
 const axios = require("axios");
 const { TT_TOKEN } = require("../constants/constants");
+const logger = require("../logs/winston");
 
 async function getTime(user, token) {
   let documentIds = await getDocumentIds("global_task_manager");
   let TT_USER = user.toUpperCase();
-  console.log(documentIds), "docID";
   for (let id of documentIds) {
     let time_tracking_entryArray = await gettimeTrackingEntry(id, token, user);
-    console.log(time_tracking_entryArray, "timeTrackingArray");
     for (let i = 0; i < time_tracking_entryArray.length; i++) {
       let currentEntry = time_tracking_entryArray[i];
       let requestData = {
@@ -50,7 +49,8 @@ async function getDocumentIds(user) {
 
     return documentIds;
   } catch (error) {
-    console.error("Error getting document IDs:", error);
+    console.log("error", "Error getting document IDs:");
+    console.log("error", error);
     return [];
   }
 }
@@ -77,7 +77,7 @@ async function gettimeTrackingEntry(id, token, user) {
     });
     return response.data.data;
   } else {
-    console.log("Document does not exist.");
+    logger.log("info", "Document does not exist.");
     return null;
   }
 }
@@ -148,11 +148,12 @@ function PostTime(data, apiKey) {
   return axios
     .request(config)
     .then((response) => {
-      console.log("Time added Success");
+      logger.log("info", "Time added Success");
       return response.data.time.id; // Return the response data
     })
     .catch((error) => {
-      console.log("Time Update Error:", error);
+      logger.log("error", "Time Update Error:");
+      logger.log("error", error);
       throw error; // Throw the error to be caught by the caller
     });
 }
@@ -185,18 +186,19 @@ async function checkGidsInFirestore(
         }
       });
     } else {
-      console.log(
+      logger.log(
+        "info",
         `Document with ID '${id}' does not exist in collection '${collectionName}'.`
       );
     }
   } catch (error) {
+    console.log("error", error);
     console.error("Error deleting task:", error);
   }
 }
 
 // Example delete function
 function deleteTask(gid, apiKey) {
-  console.log(`Deleting task with ID: ${gid}`);
   const authHeader =
     "Basic " + Buffer.from(apiKey + ":" + "").toString("base64");
   let config = {
@@ -211,10 +213,10 @@ function deleteTask(gid, apiKey) {
   axios
     .request(config)
     .then((response) => {
-      console.log("Deleted Success");
+      logger.log("info", "Deleted Success");
     })
     .catch((error) => {
-      console.log("Error while deleting Time", error);
+      logger.log("error", error);
     });
 
   // Implement your delete logic here

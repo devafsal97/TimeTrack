@@ -1,4 +1,5 @@
 const AWS = require("aws-sdk");
+const logger = require("../src/logs/winston");
 var region = "us-east-1";
 async function loadAWSSecret(secretName) {
   const client = new AWS.SecretsManager({
@@ -25,7 +26,8 @@ async function loadAWSSecret(secretName) {
 
     return secret;
   } catch (error) {
-    console.error("Error retrieving AWS secret:", error);
+    logger.log("error","Error retrieving AWS secret:")
+    logger.log("error",error)
     throw error;
   }
 }

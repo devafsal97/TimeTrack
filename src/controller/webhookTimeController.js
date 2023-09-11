@@ -21,136 +21,140 @@ const {
 } = require("../constants/constants");
 const e = require("express");
 exports.updateTime = async (req, res) => {
-  const requestBody = JSON.stringify(req.body);
-  if (req.header("X-Hook-Secret")) {
-    const xHookSecret = req.header("X-Hook-Secret");
-    const requestUrl = req.url;
+  try {
+    const requestBody = JSON.stringify(req.body);
+    if (req.header("X-Hook-Secret")) {
+      const xHookSecret = req.header("X-Hook-Secret");
+      const requestUrl = req.url;
 
-    fs.readFile(
-      path.join(__dirname, "..", "constants", "sectionTimeSecret.json"),
-      (err, data) => {
-        if (err) {
-          console.error("Error reading secret file:", err);
-        } else {
-          let secretData = {};
-          if (data.length > 0) {
-            secretData = JSON.parse(data);
-          }
-
-          secretData[requestUrl] = xHookSecret;
-
-          fs.writeFile(
-            path.join(__dirname, "..", "constants", "sectionTimeSecret.json"),
-            JSON.stringify(secretData),
-            (err) => {
-              if (err) {
-                console.error("Error writing secret file:", err);
-              } else {
-                console.log("Secret file saved successfully");
-              }
-            }
-          );
-        }
-      }
-    );
-
-    res.setHeader("X-Hook-Secret", xHookSecret);
-    res.sendStatus(200);
-  } else if (req.header("X-Hook-Signature")) {
-    const xHookSignature = req.header("X-Hook-Signature");
-
-    const xHookSecrets = JSON.parse(
-      fs.readFileSync(
+      fs.readFile(
         path.join(__dirname, "..", "constants", "sectionTimeSecret.json"),
-        "utf8"
-      )
-    );
+        (err, data) => {
+          if (err) {
+            console.error("Error reading secret file:", err);
+          } else {
+            let secretData = {};
+            if (data.length > 0) {
+              secretData = JSON.parse(data);
+            }
 
-    const xHookSecret = xHookSecrets[req.url];
-    if (xHookSecret) {
-      const calculatedSignature = crypto
-        .createHmac("sha256", xHookSecret)
-        .update(requestBody)
-        .digest("hex");
-      if (calculatedSignature === xHookSignature) {
-        res.sendStatus(200);
-        if (!!req.body.events.length) {
-          let all_events = req.body.events;
-          for (i = 0; i <= all_events.length - 1; i++) {
-            let current_event = req.body.events[i];
-            let current_asana_userGid = current_event.user.gid;
-            let current_tt_userGid = USER_MAP[current_asana_userGid];
-            let current_userName = USER_NAME[current_tt_userGid];
-            let current_asana_taskGid = current_event.parent.gid;
-            await delay(5000);
-            var occurence = await checkOccurence(current_asana_taskGid);
-            if (occurence) {
-              console.log(
-                "=== Time Update Trigger By User " + current_userName + " ==="
-              );
-              var resource = req.body.events[i].resource;
-              var resource_subtype = resource.resource_subtype;
-              const { current_tt_taskID, current_tt_worktypeID } =
-                await fetchDetails(current_asana_taskGid);
-              var timeSheet = await getTimesheet(
-                current_asana_taskGid,
-                ASANA_TOKEN[current_userName]
-              );
-              if (
-                resource_subtype == "time_tracking_entry_added" ||
-                resource_subtype == "time_tracking_entry_removed"
-              ) {
-                console.log("Added/Removed");
-                for (let i = 0; i < timeSheet.data.length; i++) {
-                  let currentEntry = timeSheet.data[i];
-                  let currentGid = currentEntry.gid;
-                  let requestData = {
-                    worktypeid: 781357,
-                    taskid: current_tt_taskID,
-                    personid: USER_MAP[currentEntry.created_by.gid],
-                    date: currentEntry.entered_on,
-                    time: (currentEntry.duration_minutes / 60).toFixed(2),
-                    billable: true,
-                  };
-                  await addTimeEntry(
+            secretData[requestUrl] = xHookSecret;
+
+            fs.writeFile(
+              path.join(__dirname, "..", "constants", "sectionTimeSecret.json"),
+              JSON.stringify(secretData),
+              (err) => {
+                if (err) {
+                  logger.log("error", "Error writing secret file:");
+                  logger.log("error", err);
+                } else {
+                  logger.log("info", "Secret file saved successfully");
+                }
+              }
+            );
+          }
+        }
+      );
+
+      res.setHeader("X-Hook-Secret", xHookSecret);
+      res.sendStatus(200);
+    } else if (req.header("X-Hook-Signature")) {
+      const xHookSignature = req.header("X-Hook-Signature");
+
+      const xHookSecrets = JSON.parse(
+        fs.readFileSync(
+          path.join(__dirname, "..", "constants", "sectionTimeSecret.json"),
+          "utf8"
+        )
+      );
+
+      const xHookSecret = xHookSecrets[req.url];
+      if (xHookSecret) {
+        const calculatedSignature = crypto
+          .createHmac("sha256", xHookSecret)
+          .update(requestBody)
+          .digest("hex");
+        if (calculatedSignature === xHookSignature) {
+          res.sendStatus(200);
+          if (!!req.body.events.length) {
+            let all_events = req.body.events;
+            for (i = 0; i <= all_events.length - 1; i++) {
+              let current_event = req.body.events[i];
+              let current_asana_userGid = current_event.user.gid;
+              let current_tt_userGid = USER_MAP[current_asana_userGid];
+              let current_userName = USER_NAME[current_tt_userGid];
+              let current_asana_taskGid = current_event.parent.gid;
+              await delay(5000);
+              var occurence = await checkOccurence(current_asana_taskGid);
+              if (occurence) {
+                var resource = req.body.events[i].resource;
+                var resource_subtype = resource.resource_subtype;
+                const { current_tt_taskID, current_tt_worktypeID } =
+                  await fetchDetails(current_asana_taskGid);
+                var timeSheet = await getTimesheet(
+                  current_asana_taskGid,
+                  ASANA_TOKEN[current_userName]
+                );
+                if (
+                  resource_subtype == "time_tracking_entry_added" ||
+                  resource_subtype == "time_tracking_entry_removed"
+                ) {
+                  for (let i = 0; i < timeSheet.data.length; i++) {
+                    let currentEntry = timeSheet.data[i];
+                    let currentGid = currentEntry.gid;
+                    let requestData = {
+                      worktypeid: 781357,
+                      taskid: current_tt_taskID,
+                      personid: USER_MAP[currentEntry.created_by.gid],
+                      date: currentEntry.entered_on,
+                      time: (currentEntry.duration_minutes / 60).toFixed(2),
+                      billable: true,
+                    };
+                    await addTimeEntry(
+                      current_asana_taskGid,
+                      currentGid,
+                      requestData,
+                      TT_TOKEN[current_userName]
+                    );
+                  }
+                  await verifyAndDeleteGids(
                     current_asana_taskGid,
-                    currentGid,
-                    requestData,
+                    timeSheet.data,
+                    current_userName
+                  );
+                } else {
+                  await getCommentIdsForGids(
+                    timeSheet.data,
+                    current_asana_taskGid,
+                    current_tt_worktypeID,
                     TT_TOKEN[current_userName]
                   );
                 }
-                await verifyAndDeleteGids(
-                  current_asana_taskGid,
-                  timeSheet.data,
-                  current_userName
-                );
-              } else {
-                console.log("CONStime_tracking_entry_changed;");
-                await getCommentIdsForGids(
-                  timeSheet.data,
-                  current_asana_taskGid,
-                  current_tt_worktypeID,
-                  TT_TOKEN[current_userName]
-                );
               }
             }
           }
         }
       }
     }
+  } catch (error) {
+    logger.log("error", error);
   }
 };
 
 async function getTimesheet(id, token) {
-  const response = await axios.get(
-    `https://app.asana.com/api/1.0/tasks/${id}/time_tracking_entries`,
-    {
-      headers: {
-        Authorization: token,
-      },
-    }
-  );
-  return response.data;
+  try {
+    const response = await axios.get(
+      `https://app.asana.com/api/1.0/tasks/${id}/time_tracking_entries`,
+      {
+        headers: {
+          Authorization: token,
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    logger.log("error", error);
+  }
 }
 
 async function fetchDetails(documentId) {
@@ -165,11 +169,12 @@ async function fetchDetails(documentId) {
         current_tt_worktypeID: data.current_tt_worktypeID,
       };
     } else {
-      console.log("Document not found!");
+      logger.log("error", "Document not found!");
       return null;
     }
   } catch (error) {
-    console.log("Error getting document:", error);
+    logger.log("error", "getting document:");
+    logger.log("error", error);
     return null;
   }
 }
@@ -197,7 +202,8 @@ async function addTimeEntry(current_asana_taskGid, currentGid, data, token) {
     // Document does not exist or currentGid is already present in timeEntries
     return false; // Indicate that currentGid was not added
   } catch (error) {
-    console.error("Error updating document:", error);
+    logger.log("error", "Error getting document:");
+    logger.log("error", error);
     return false; // Indicate that an error occurred and currentGid was not added
   }
 }
@@ -220,11 +226,12 @@ function PostTime(data, apiKey) {
   return axios
     .request(config)
     .then((response) => {
-      console.log("Time added Success");
+      logger.log("info", "Time added Success");
       return response.data.time.id; // Return the response data
     })
     .catch((error) => {
-      console.log("Time Update Error:", error);
+      logger.log("error", "Time Update Error:");
+      logger.log("error", error);
       throw error; // Throw the error to be caught by the caller
     });
 }
@@ -257,14 +264,14 @@ async function verifyAndDeleteGids(
 
     // Update the Firestore document with the modified timeEntries data
     await collectionRef.doc(documentId).update({ timeEntries });
-    console.log("Verification and deletion completed successfully.");
+    logger.log("info", "Verification and deletion completed successfully.");
   } catch (error) {
-    console.error("Error occurred:", error);
+    logger.log("error", error);
   }
 }
 
 async function deleteTime(gid, apiKey) {
-  console.log(`Deleting task with ID: ${gid}`);
+  logger.log("info", `Deleting task with ID: ${gid}`);
   const authHeader =
     "Basic " + Buffer.from(apiKey + ":" + "").toString("base64");
   let config = {
@@ -279,10 +286,10 @@ async function deleteTime(gid, apiKey) {
   axios
     .request(config)
     .then((response) => {
-      console.log("Deleted Success");
+      logger.log("info", "Deleted Success");
     })
     .catch((error) => {
-      console.log("Error while deleting Time", error);
+      logger.log("error", error);
     });
 }
 
@@ -292,24 +299,28 @@ async function getCommentIdsForGids(
   current_tt_worktypeID,
   token
 ) {
-  const collectionRef = db.collection("global_task_manager");
-  for (const entry of data) {
-    const gid = entry.gid;
-    const docRef = collectionRef.doc(current_asana_taskGid);
-    const docSnapshot = await docRef.get();
-    if (docSnapshot.exists) {
-      const timeEntriesMap = docSnapshot.data().timeEntries;
-      if (timeEntriesMap && timeEntriesMap[gid]) {
-        const commentId = timeEntriesMap[gid];
-        let data = {
-          projectid: current_tt_worktypeID,
-          billable: true,
-          date: entry.entered_on,
-          time: (entry.duration_minutes / 60).toFixed(2),
-        };
-        await putTime(commentId, data, token);
+  try {
+    const collectionRef = db.collection("global_task_manager");
+    for (const entry of data) {
+      const gid = entry.gid;
+      const docRef = collectionRef.doc(current_asana_taskGid);
+      const docSnapshot = await docRef.get();
+      if (docSnapshot.exists) {
+        const timeEntriesMap = docSnapshot.data().timeEntries;
+        if (timeEntriesMap && timeEntriesMap[gid]) {
+          const commentId = timeEntriesMap[gid];
+          let data = {
+            projectid: current_tt_worktypeID,
+            billable: true,
+            date: entry.entered_on,
+            time: (entry.duration_minutes / 60).toFixed(2),
+          };
+          await putTime(commentId, data, token);
+        }
       }
     }
+  } catch (error) {
+    logger.log("error", error);
   }
 }
 
@@ -332,11 +343,11 @@ function putTime(commentId, data, apiKey) {
   return axios
     .request(config)
     .then((response) => {
-      console.log("Update Success");
+      logger.log("info", "Update Success");
       return response.data; // Return the response data
     })
     .catch((error) => {
-      console.log("Error:", error);
+      logger.log("error", error);
       throw error; // Throw the error to be caught by the caller
     });
 }
