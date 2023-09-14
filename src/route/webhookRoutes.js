@@ -19,6 +19,8 @@ const cretaeRoutes = [
   "/createtask10",
   "/createtask11",
   "/createtask12",
+  "/createtask13",
+  "/createtask14",
   // Add more routes as needed
 ];
 
@@ -35,6 +37,8 @@ const updateRoutes = [
   "/updatetask10",
   "/updatetask11",
   "/updatetask12",
+  "/updatetask13",
+  "/updatetask14",
 
   // Add more routes as needed
 ];

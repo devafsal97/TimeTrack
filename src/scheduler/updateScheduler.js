@@ -80,7 +80,7 @@ const getTaskFromAsana = async (projectID) => {
 
     const config = {
       headers: {
-        Authorization: `Bearer ${apikey}`,
+        Authorization: apikey,
       },
       params: params,
     };
@@ -127,7 +127,7 @@ async function fetchTaskDetails(taskGID) {
   try {
     const config = {
       headers: {
-        Authorization: `Bearer ${apikey}`,
+        Authorization: apikey,
       },
     };
 

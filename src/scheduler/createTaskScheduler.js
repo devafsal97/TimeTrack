@@ -2,6 +2,7 @@
 const firestore = require("../services/firestore");
 const db = firestore.db;
 const axios = require("axios");
+
 const {
   TT_TOKEN,
   ASANA_TOKEN,
@@ -10,115 +11,182 @@ const {
   log,
   USER_NAME,
 } = require("../constants/constants");
+
 const {
   getTaskDetails,
   STATUS_ID,
   PRIORITY_ID,
   PROJECTS,
 } = require("../constants/constants");
-const { loadAWSSecret } = require("../../config/secreteManagerConfig");
-const logger = require("../logs/winston");
-async function verifyTasks() {
-  logger.log("info", `verify task executed for day ${Date.now().toString()}`);
-  let asanaSecret = await loadAWSSecret("timetrack/api/asana");
-  let timetaskSecret = await loadAWSSecret("timetrack/api/timetask");
-  let taskIDfromDB = await getDocumentIDs();
-  let all_asanaTaskGID = [];
 
-  for (const id of ASANA_PROJECTGID) {
-    let current_asanaTaskGID = await getAlltask(
-      id,
-      asanaSecret["PRABHATH PANICKER"]
+const { loadAWSSecret } = require("../../config/secreteManagerConfig");
+
+const logger = require("../logs/winston");
+
+async function createTaskScheduler() {
+  for (const gid of ASANA_PROJECTGID) {
+    logger.log(
+      "info",
+      `create task scheduler executing for project with gid ${gid}`
     );
-    for (let i = 0; i < current_asanaTaskGID.length; i++) {
-      let currentGid = current_asanaTaskGID[i].gid;
-      all_asanaTaskGID.push(currentGid);
+    const tasks = await getTaskFromAsana(gid);
+    if (tasks != null) {
+      const filteredTask = await filterTask(tasks);
+      logger.log("info");
+      console.log("filtered task length", filteredTask.length);
+      await checkTaskExist(filteredTask);
     }
   }
-  let missingGIDs = all_asanaTaskGID.filter(
-    (gid) => !taskIDfromDB.includes(gid)
-  );
-  for (const id of missingGIDs) {
-    let taskDetails = await getTaskDetails(
-      id,
-      asanaSecret["PRABHATH PANICKER"]
-    );
-    let requestData = await createReqData(taskDetails);
-    let response = await postTask(
-      requestData,
-      timetaskSecret[USER_NAME[requestData.ownerid]]
-    );
-    console.log(response, "response");
-    requestData.current_tt_taskID = response.task.id;
-    requestData.ownerName = USER_NAME[requestData.ownerid];
-    requestData.current_tt_worktypeID =
-      PROJECTS[taskDetails.data.projects[0].name];
-    logger.log("info", `${requestData.title} Task Created`);
+}
 
-    // Add requestData key-value pairs to global_task_manager collection
-    const docRef = db.collection("global_task_manager").doc(id);
+const checkTaskExist = async (filteredTask) => {
+  for (const task of filteredTask) {
+    const documentId = task.gid;
+    const docRef = db.collection("global_task_manager").doc(documentId);
+    const doc = await docRef.get();
+    if (doc.exists) {
+      console.log(`Document with ID ${documentId} exists.`);
+    } else {
+      console.log(`Document with ID ${documentId} does not exist.`);
+      await createTask(task);
+    }
+  }
+};
+
+const createTask = async (task) => {
+  const timetaskSecret = await loadAWSSecret("timetrack/api/timetask");
+  const apikey = timetaskSecret["PRABHATH PANICKER"];
+  const requestbody = await createReqData(task);
+
+  const authHeader =
+    "Basic " + Buffer.from(apikey + ":" + "").toString("base64");
+  let config = {
+    method: "post",
+    maxBodyLength: Infinity,
+    url: "https://api.myintervals.com/task/",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: authHeader,
+    },
+    data: requestbody,
+  };
+
+  const response = await axios.request(config);
+  if (response.data.status == "Created") {
+    logger.log(
+      "info",
+      `task created successfully with id ${response.data.task.id}`
+    );
+    requestbody.current_tt_taskID = response.data.task.id;
+    requestbody.current_tt_worktypeID = PROJECTS[task.projects[0].name];
+    requestbody.ownerName = USER_NAME[requestbody.ownerid];
+    const docRef = db.collection("global_task_manager").doc(task.gid);
     await docRef.set({
-      ...requestData,
+      ...requestbody,
     });
+  }
+};
+
+const filterTask = async (tasks) => {
+  try {
+    const filteredTask = [];
+    for (const task of tasks) {
+      const taskDetails = await fetchTaskDetails(task.gid);
+
+      const currentUTCDate = new Date();
+      const oneDayInMilliseconds = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+      const yesterdayUTCDate = new Date(
+        currentUTCDate.getTime() - oneDayInMilliseconds
+      ).toISOString();
+
+      const providedTimestamp = new Date(
+        taskDetails.data.created_at
+      ).toISOString();
+
+      if (providedTimestamp > yesterdayUTCDate) {
+        filteredTask.push(taskDetails.data);
+      }
+    }
+    return filteredTask;
+  } catch (error) {
+    logger.log("error", error);
+  }
+};
+
+async function fetchTaskDetails(taskGID) {
+  const timetaskSecret = await loadAWSSecret("timetrack/api/asana");
+  const apikey = timetaskSecret["PRABHATH PANICKER"];
+  try {
+    const config = {
+      headers: {
+        Authorization: apikey,
+      },
+    };
+
+    const response = await axios.get(
+      `https://app.asana.com/api/1.0/tasks/${taskGID}`,
+      config
+    );
+    return response.data;
+  } catch (error) {
+    logger.log(
+      "info",
+      `Error fetching task details for task GID ${taskGID}: ${error}`
+    );
+    return null;
   }
 }
 
-async function getDocumentIDs() {
-  var collectionRef = db.collection("global_task_manager");
-
-  return collectionRef
-    .get()
-    .then((querySnapshot) => {
-      var taskIDfromDB = [];
-
-      querySnapshot.forEach((doc) => {
-        taskIDfromDB.push(doc.id);
-      });
-
-      return taskIDfromDB;
-    })
-    .catch((error) => {
-      logger.log("error", "Error getting documents:");
-      logger.log("error", error);
-      return [];
-    });
-}
-
-async function getAlltask(project_gid, token) {
+const getTaskFromAsana = async (projectID) => {
   try {
+    const asanasecret = await loadAWSSecret("timetrack/api/asana");
+    const apikey = asanasecret["PRABHATH PANICKER"];
+    const projectGid = projectID; // Replace with the actual project GID
+    const currentUTCDate = new Date();
+    const oneDayInMilliseconds = 24 * 60 * 60 * 1000;
+    const yesterdayUTCDate = new Date(
+      currentUTCDate.getTime() - oneDayInMilliseconds
+    );
+
+    const params = {
+      completed_since: yesterdayUTCDate,
+    };
+
+    const config = {
+      headers: {
+        Authorization: apikey,
+      },
+      params: params,
+    };
+
     const response = await axios.get(
-      `https://app.asana.com/api/1.0/projects/${project_gid}/tasks`,
-      {
-        headers: {
-          Authorization: token,
-        },
-      }
+      `https://app.asana.com/api/1.0/projects/${projectGid}/tasks`,
+      config
     );
     return response.data.data;
   } catch (error) {
-    logger.log("error", "Error getting all task from asana");
     logger.log("error", error);
-    throw error;
   }
-}
+};
+
 async function createReqData(taskDetails) {
   let requestData = {
     statusid: STATUS_ID,
     priorityid: PRIORITY_ID,
   };
-  requestData.projectid = PROJECTS[taskDetails.data.projects[0].name];
-  requestData.title = taskDetails.data.name;
-  requestData.dateopen = convertToDateOnly(taskDetails.data.created_at);
-  requestData.ownerid = USER_MAP[taskDetails.data.followers[0].gid];
+  requestData.projectid = PROJECTS[taskDetails.projects[0].name];
+  requestData.title = taskDetails.name;
+  requestData.dateopen = convertToDateOnly(taskDetails.created_at);
+  requestData.ownerid = USER_MAP[taskDetails.followers[0].gid];
   requestData.moduleid = 450029;
-  if (taskDetails.data.assignee != null) {
-    requestData.assigneeid = USER_MAP[taskDetails.data.assignee.gid];
+  if (taskDetails.assignee != null) {
+    requestData.assigneeid = USER_MAP[taskDetails.assignee.gid];
   }
-  if (taskDetails.data.notes != null) {
-    requestData.summary = taskDetails.data.notes;
+  if (taskDetails.notes != null) {
+    requestData.summary = taskDetails.notes;
   }
-  if (taskDetails.data.due_on != null) {
-    requestData.datedue = taskDetails.data.due_on;
+  if (taskDetails.due_on != null) {
+    requestData.datedue = taskDetails.due_on;
   }
   return requestData;
 }
@@ -128,33 +196,6 @@ function convertToDateOnly(dateString) {
   const convertedDate = date.toISOString().split("T")[0];
   return convertedDate;
 }
-
-async function postTask(data, apiKey) {
-  console.log(data, apiKey);
-  const authHeader =
-    "Basic " + Buffer.from(apiKey + ":" + "").toString("base64");
-  let config = {
-    method: "post",
-    maxBodyLength: Infinity,
-    url: "https://api.myintervals.com/task/",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: authHeader,
-    },
-    data: data,
-  };
-
-  return axios
-    .request(config)
-    .then((response) => {
-      log(`[INFO] ${data.title} Task Creation Completed`);
-      return response.data; // Return the response data
-    })
-    .catch((error) => {
-      logger.log("error", "Error while updating a task");
-      logger.log("error", error);
-    });
-}
 module.exports = {
-  verifyTasks,
+  createTaskScheduler,
 };

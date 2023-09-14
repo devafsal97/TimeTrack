@@ -81,15 +81,15 @@ exports.createTask = async (req, res) => {
           .digest("hex");
         if (calculatedSignature === xHookSignature) {
           res.sendStatus(200);
-          console.log(req.body.events);
-          if (req.body.events) {
-            logger.log("info", `webhook received for event${req.body.events}`);
-          }
+          const eventsString = JSON.stringify(req.body.events);
+          logger.log("info", `req received for event ${eventsString}`);
           if (!!req.body.events.length) {
             let all_events = req.body.events;
             const processedResourceGids = new Set();
             for (i = 0; i <= all_events.length - 1; i++) {
+              logger.log("info", `webhook received for event${all_events[i]}`);
               let current_event = all_events[i];
+              logger.log("info", `webhook received for event${current_event}`);
               let current_asana_userGid = current_event.user.gid;
               let current_tt_userGid = USER_MAP[current_asana_userGid];
               let current_userName = USER_NAME[current_tt_userGid];
@@ -211,7 +211,7 @@ async function postTask(data, apiKey) {
   return axios
     .request(config)
     .then((response) => {
-      logger.log("info", `${data.title} Task Creation Completed`);
+      logger.log("info", `${data.task.title} Task Creation Completed`);
       return response.data; // Return the response data
     })
     .catch((error) => {
