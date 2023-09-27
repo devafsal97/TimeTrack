@@ -10,7 +10,6 @@ const {
   USER_NAME,
   STATUS_ID,
   PRIORITY_ID,
-  PROJECTS,
   MODULES,
   getTaskDetails,
   checkOccurence,
@@ -19,6 +18,9 @@ const {
 } = require("../constants/constants");
 const { loadAWSSecret } = require("../../config/secreteManagerConfig");
 const logger = require("../logs/winston");
+
+const taskProcessingCache = {};
+
 exports.createTask = async (req, res) => {
   const requestBody = JSON.stringify(req.body);
   try {
@@ -29,7 +31,6 @@ exports.createTask = async (req, res) => {
         path.join(__dirname, "..", "constants", "sectionCreateSecret.json"),
         (err, data) => {
           if (err) {
-            console.error("Error reading secret file:", err);
             logger.log("error", "Error reading secret file:");
             logger.log("error", err);
           } else {
@@ -81,15 +82,20 @@ exports.createTask = async (req, res) => {
           .digest("hex");
         if (calculatedSignature === xHookSignature) {
           res.sendStatus(200);
+          console.log("req body events", req.body.events);
+          const PROJECTS = await getTtProjects();
           const eventsString = JSON.stringify(req.body.events);
           logger.log("info", `req received for event ${eventsString}`);
           if (!!req.body.events.length) {
             let all_events = req.body.events;
             const processedResourceGids = new Set();
             for (i = 0; i <= all_events.length - 1; i++) {
-              logger.log("info", `webhook received for event${all_events[i]}`);
+              const eventsStringCurrent = JSON.stringify(all_events[i]);
+              logger.log(
+                "info",
+                `webhook received for event${eventsStringCurrent}`
+              );
               let current_event = all_events[i];
-              logger.log("info", `webhook received for event${current_event}`);
               let current_asana_userGid = current_event.user.gid;
               let current_tt_userGid = USER_MAP[current_asana_userGid];
               let current_userName = USER_NAME[current_tt_userGid];
@@ -107,9 +113,6 @@ exports.createTask = async (req, res) => {
               var occurence = await checkOccurence(current_asana_taskGid);
               logger.log("info", `occurence :- ${occurence}`);
               if (!occurence && current_parent_resource === "project") {
-                delay(10000);
-                logger.log("info", "Task Created");
-
                 let asanaSecret = await loadAWSSecret("timetrack/api/asana");
                 let timetaskSecret = await loadAWSSecret(
                   "timetrack/api/timetask"
@@ -118,35 +121,59 @@ exports.createTask = async (req, res) => {
                   current_asana_taskGid,
                   asanaSecret[current_userName]
                 );
+                console.log("task details", taskDetails);
+
                 if (taskDetails === 400) {
                   console.log("Task Details is 400. Skipping this iteration.");
                   continue; // Skip this iteration and move to the next one
                 }
+                if (taskProcessingCache[taskDetails.data.gid]) {
+                  console.log(
+                    `Task with ID ${taskId} is already being processed. Skipping...`
+                  );
+                  continue;
+                }
+
+                taskProcessingCache[taskDetails.data.gid] = true;
+                console.log("task processiing cache", taskProcessingCache);
+
                 let requestData = await createReqData(
                   taskDetails,
-                  current_tt_userGid
+                  current_tt_userGid,
+                  PROJECTS
                 );
                 logger.log("info", `Executed ${i}st time`);
-                let response = await postTask(
+                let ttResponse = await postTask(
                   requestData,
                   timetaskSecret[current_userName]
                 );
-                requestData.current_tt_taskID = response.task.id;
-                requestData.current_tt_worktypeID =
-                  PROJECTS[taskDetails.data.projects[0].name];
-                requestData.ownerName = current_userName;
-                logger.log("info", `${requestData.title} Task Created`);
-
-                // Add requestData key-value pairs to global_task_manager collection
-                try {
-                  const docRef = db
-                    .collection("global_task_manager")
-                    .doc(current_asana_taskGid);
-                  await docRef.set({
-                    ...requestData,
-                  });
-                } catch (error) {
-                  logger.log("error", error);
+                console.log(ttResponse.data);
+                if (ttResponse.data.status == "Created") {
+                  console.log("task created successfully in tt");
+                  await addCommentInAsana(
+                    ttResponse.data.task.localid,
+                    taskDetails.data.gid
+                  );
+                  requestData.current_tt_taskID = ttResponse.data.task.id;
+                  requestData.current_tt_worktypeID =
+                    PROJECTS[taskDetails.data.projects[0].name];
+                  requestData.ownerName = current_userName;
+                  try {
+                    const docRef = db
+                      .collection("global_task_manager")
+                      .doc(current_asana_taskGid);
+                    const response = await docRef.set({
+                      ...requestData,
+                    });
+                    console.log(response);
+                    if (response.hasOwnProperty("_writeTime")) {
+                      console.log("data writed to tt");
+                      delete taskProcessingCache[taskDetails.data.gid];
+                      console.log("taskProcessingCache", taskProcessingCache);
+                    }
+                  } catch (error) {
+                    logger.log("error", error);
+                  }
                 }
               }
             }
@@ -159,7 +186,7 @@ exports.createTask = async (req, res) => {
   }
 };
 
-async function createReqData(taskDetails, id) {
+async function createReqData(taskDetails, id, PROJECTS) {
   try {
     let requestData = {
       statusid: STATUS_ID,
@@ -195,28 +222,25 @@ async function createReqData(taskDetails, id) {
 }
 
 async function postTask(data, apiKey) {
-  const authHeader =
-    "Basic " + Buffer.from(apiKey + ":" + "").toString("base64");
-  let config = {
-    method: "post",
-    maxBodyLength: Infinity,
-    url: "https://api.myintervals.com/task/",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: authHeader,
-    },
-    data: data,
-  };
+  try {
+    const authHeader =
+      "Basic " + Buffer.from(apiKey + ":" + "").toString("base64");
+    let config = {
+      method: "post",
+      maxBodyLength: Infinity,
+      url: "https://api.myintervals.com/task/",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: authHeader,
+      },
+      data: data,
+    };
 
-  return axios
-    .request(config)
-    .then((response) => {
-      logger.log("info", `${data.task.title} Task Creation Completed`);
-      return response.data; // Return the response data
-    })
-    .catch((error) => {
-      logger.log("error", `Error while updating a task : ${error}`);
-    });
+    const response = await axios.request(config);
+    return response;
+  } catch (error) {
+    logger.log("error", error.message);
+  }
 }
 
 function convertToDateOnly(dateString) {
@@ -225,6 +249,72 @@ function convertToDateOnly(dateString) {
     const convertedDate = date.toISOString().split("T")[0];
     return convertedDate;
   } catch (error) {
-    logger.log("error", error);
+    logger.log("error", error.message);
   }
 }
+
+const getAsanaProjectId = async () => {
+  try {
+    const querySnapshot = await db
+      .collection("asana_project_gid")
+      .limit(1)
+      .get();
+
+    if (!querySnapshot.empty) {
+      const documentData = querySnapshot.docs[0].data();
+      const projects = documentData.ASANA_PROJECTGID;
+      console.log("Projects:", projects);
+      return projects;
+    } else {
+      logger.log("error", "No documents found in the collection.");
+    }
+  } catch (error) {
+    logger.log("error", error);
+  }
+};
+
+const getTtProjects = async () => {
+  try {
+    const querySnapshot = await db.collection("tt_project_id").limit(1).get();
+    if (!querySnapshot.empty) {
+      const documentData = querySnapshot.docs[0].data();
+      const projects = documentData.PROJECTS;
+      return projects;
+    } else {
+      logger.log("error", "No documents found in the collection.");
+    }
+  } catch (error) {
+    logger.log("error", error);
+  }
+};
+
+const addCommentInAsana = async (ttLocalId, asanaTaskId) => {
+  const asanasecret = await loadAWSSecret("timetrack/api/asana");
+  const apikey = asanasecret["PRABHATH PANICKER"];
+  try {
+    const ASANA_API_BASE_URL = "https://app.asana.com/api/1.0";
+    const comment = `https://auki.timetask.com/tasks/view/${ttLocalId}/notes/`;
+    const response = await axios.post(
+      `${ASANA_API_BASE_URL}/tasks/${asanaTaskId}/stories`,
+      {
+        data: {
+          text: comment,
+        },
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: apikey,
+        },
+      }
+    );
+    logger.log("info", `Comment added to task ${asanaTaskId}`);
+  } catch (error) {
+    logger.log(
+      "error",
+      `Error adding comment to task ${
+        error.response ? error.response.data : error.message
+      }`
+    );
+  }
+};

@@ -24,6 +24,7 @@ const { loadAWSSecret } = require("../../config/secreteManagerConfig");
 const logger = require("../logs/winston");
 
 async function createTaskScheduler() {
+  const ASANA_PROJECTGID = await getAsanaProjectGid();
   for (const gid of ASANA_PROJECTGID) {
     logger.log(
       "info",
@@ -38,6 +39,26 @@ async function createTaskScheduler() {
     }
   }
 }
+
+const getAsanaProjectGid = async () => {
+  try {
+    const querySnapshot = await db
+      .collection("asana_project_gid")
+      .limit(1)
+      .get();
+
+    if (!querySnapshot.empty) {
+      const documentData = querySnapshot.docs[0].data();
+      const projects = documentData.ASANA_PROJECTGID;
+      console.log("Projects:", projects);
+      return projects;
+    } else {
+      logger.log("error", "No documents found in the collection.");
+    }
+  } catch (error) {
+    logger.log("error", error.message);
+  }
+};
 
 const checkTaskExist = async (filteredTask) => {
   for (const task of filteredTask) {

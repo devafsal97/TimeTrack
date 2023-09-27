@@ -14,18 +14,38 @@ const {
   log,
   TT_TOKEN,
   ASANA_TOKEN,
-  ASANA_PROJECTGID,
 } = require("../constants/constants");
 const logger = require("../logs/winston");
 const { loadAWSSecret } = require("../../config/secreteManagerConfig");
 
 const updateScheduler = async () => {
+  const ASANA_PROJECTGID = await getAsanaProjectGid();
   for (const gid of ASANA_PROJECTGID) {
     const tasks = await getTaskFromAsana(gid);
     if (tasks != null) {
       const filteredTask = await filterTask(tasks);
       await updateTask(filteredTask);
     }
+  }
+};
+
+const getAsanaProjectGid = async () => {
+  try {
+    const querySnapshot = await db
+      .collection("asana_project_gid")
+      .limit(1)
+      .get();
+
+    if (!querySnapshot.empty) {
+      const documentData = querySnapshot.docs[0].data();
+      const projects = documentData.ASANA_PROJECTGID;
+      console.log("Projects:", projects);
+      return projects;
+    } else {
+      logger.log("error", "No documents found in the collection.");
+    }
+  } catch (error) {
+    logger.log("error", error.message);
   }
 };
 
