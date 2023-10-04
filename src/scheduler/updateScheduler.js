@@ -15,10 +15,14 @@ const {
   TT_TOKEN,
   ASANA_TOKEN,
 } = require("../constants/constants");
-const logger = require("../logs/winston");
+const logger = require("../logs/updateScheduler");
 const { loadAWSSecret } = require("../../config/secreteManagerConfig");
 
 const updateScheduler = async () => {
+  logger.log(
+    "info",
+    `update task scheduler executing for day${new Date().toISOString()}`
+  );
   const ASANA_PROJECTGID = await getAsanaProjectGid();
   for (const gid of ASANA_PROJECTGID) {
     const tasks = await getTaskFromAsana(gid);
@@ -71,14 +75,13 @@ const updateTask = async (filteredTask) => {
         };
         const response = await axios.request(config);
         if (response.status == 200) {
-          logger.log("info", "task updated successfully");
         } else {
           logger.log("error", "task update failed");
         }
       }
     }
   } catch (error) {
-    logger.log("error", error);
+    logger.log("error", error.message);
   }
 };
 
@@ -111,7 +114,7 @@ const getTaskFromAsana = async (projectID) => {
     );
     return response.data.data;
   } catch (error) {
-    logger.log("error", error);
+    logger.log("error", error.message);
   }
 };
 
@@ -137,7 +140,7 @@ const filterTask = async (tasks) => {
     }
     return filteredTask;
   } catch (error) {
-    logger.log("error", error);
+    logger.log("error", error.message);
   }
 };
 
@@ -187,7 +190,7 @@ async function getTTID(current_asana_taskid) {
       return null;
     }
   } catch (error) {
-    logger.log("error", error);
+    logger.log("error", error.message);
   }
 }
 
@@ -218,7 +221,7 @@ async function createReqData(taskDetails) {
     }
     return requestData;
   } catch (error) {
-    logger.log("error", error);
+    logger.log("error", error.message);
   }
 }
 const convertToDateOnly = async (dateString) => {
@@ -227,7 +230,7 @@ const convertToDateOnly = async (dateString) => {
     const convertedDate = date.toISOString().split("T")[0];
     return convertedDate;
   } catch (error) {
-    logger.log("error", error);
+    logger.log("error", error.message);
   }
 };
 module.exports = {

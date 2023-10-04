@@ -6,7 +6,6 @@ const axios = require("axios");
 const {
   TT_TOKEN,
   ASANA_TOKEN,
-  ASANA_PROJECTGID,
   USER_MAP,
   log,
   USER_NAME,
@@ -21,20 +20,18 @@ const {
 
 const { loadAWSSecret } = require("../../config/secreteManagerConfig");
 
-const logger = require("../logs/winston");
+const logger = require("../logs/createScheduler");
 
 async function createTaskScheduler() {
+  logger.log(
+    "info",
+    `create task scheduler executing for day${new Date().toISOString()}`
+  );
   const ASANA_PROJECTGID = await getAsanaProjectGid();
   for (const gid of ASANA_PROJECTGID) {
-    logger.log(
-      "info",
-      `create task scheduler executing for project with gid ${gid}`
-    );
     const tasks = await getTaskFromAsana(gid);
     if (tasks != null) {
       const filteredTask = await filterTask(tasks);
-      logger.log("info");
-      console.log("filtered task length", filteredTask.length);
       await checkTaskExist(filteredTask);
     }
   }
@@ -50,7 +47,6 @@ const getAsanaProjectGid = async () => {
     if (!querySnapshot.empty) {
       const documentData = querySnapshot.docs[0].data();
       const projects = documentData.ASANA_PROJECTGID;
-      console.log("Projects:", projects);
       return projects;
     } else {
       logger.log("error", "No documents found in the collection.");
@@ -66,10 +62,10 @@ const checkTaskExist = async (filteredTask) => {
     const docRef = db.collection("global_task_manager").doc(documentId);
     const doc = await docRef.get();
     if (doc.exists) {
-      console.log(`Document with ID ${documentId} exists.`);
+      logger.log("info", `Document with ID ${documentId} exists.`);
     } else {
-      console.log(`Document with ID ${documentId} does not exist.`);
-      await createTask(task);
+      logger.log("info", `Document with ID ${documentId} does not exist.`);
+      const taskCreated = await createTask(task);
     }
   }
 };
@@ -105,6 +101,13 @@ const createTask = async (task) => {
     await docRef.set({
       ...requestbody,
     });
+    return true;
+  } else {
+    logger.log(
+      "error",
+      `task creation failed for task with id ${response.data.task.id}`
+    );
+    return false;
   }
 };
 
@@ -130,7 +133,7 @@ const filterTask = async (tasks) => {
     }
     return filteredTask;
   } catch (error) {
-    logger.log("error", error);
+    logger.log("error", error.message);
   }
 };
 
@@ -151,8 +154,8 @@ async function fetchTaskDetails(taskGID) {
     return response.data;
   } catch (error) {
     logger.log(
-      "info",
-      `Error fetching task details for task GID ${taskGID}: ${error}`
+      "error",
+      `Error fetching task details for task GID ${taskGID}: ${error.message}`
     );
     return null;
   }
@@ -186,7 +189,7 @@ const getTaskFromAsana = async (projectID) => {
     );
     return response.data.data;
   } catch (error) {
-    logger.log("error", error);
+    logger.log("error", error.message);
   }
 };
 

@@ -1,23 +1,29 @@
 const { log } = require("../constants/constants");
 const axios = require("axios");
 const { loadAWSSecret } = require("../../config/secreteManagerConfig");
-const logger = require("../logs/winston");
-const { request } = require("express");
+const logger = require("../logs/deleteScheduler");
 
 async function deleteDuplicateTask() {
-  logger.log(
-    "info",
-    `delete duplicate task executing for day${new Date().toISOString()}}`
-  );
-  const allTasks = await getAllTasks();
-  if (allTasks != null) {
-    for (const task of allTasks.task) {
-      if (task.title === "Waiting for title") {
-        logger.log("info", `Matching task found with ID: ${task.id}`);
-        let matchid = task.id;
-        await deleteTask(matchid);
+  try {
+    let taskDeletedCount = 0;
+    logger.log(
+      "info",
+      `delete duplicate task executing for day${new Date().toISOString()}`
+    );
+    const allTasks = await getAllTasks();
+    if (allTasks != null) {
+      for (const task of allTasks.task) {
+        if (task.title === "Waiting for title") {
+          logger.log("delete", `Matching task found with ID: ${task.id}`);
+          let matchid = task.id;
+          await deleteTask(matchid);
+          taskDeletedCount = taskDeletedCount + 1;
+        }
       }
     }
+    logger.log("info", `total deleted task count ${taskDeletedCount}`);
+  } catch (error) {
+    logger.log("error", error.message);
   }
 }
 
@@ -66,7 +72,7 @@ async function deleteTask(id) {
   if (response.status == 200) {
     logger.log("info", `task deletion successfull for task with id ${id}`);
   } else {
-    logger.log("info", `task deletion failed for task with id ${id}`);
+    logger.log("error", `task deletion failed for task with id ${id}`);
   }
 }
 

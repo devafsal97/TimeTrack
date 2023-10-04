@@ -21,6 +21,7 @@ exports.updateTask = async (req, res) => {
     if (req.header("X-Hook-Secret")) {
       const xHookSecret = req.header("X-Hook-Secret");
       const requestUrl = req.url;
+      const pid = req.query.proejctGid;
 
       fs.readFile(
         path.join(
@@ -39,7 +40,7 @@ exports.updateTask = async (req, res) => {
               secretData = JSON.parse(data);
             }
 
-            secretData[requestUrl] = xHookSecret;
+            secretData[pid] = xHookSecret;
 
             fs.writeFile(
               path.join(
@@ -79,7 +80,7 @@ exports.updateTask = async (req, res) => {
         )
       );
 
-      const xHookSecret = xHookSecrets[req.url];
+      const xHookSecret = xHookSecrets[req.query.proejctGid];
       if (xHookSecret) {
         const calculatedSignature = crypto
           .createHmac("sha256", xHookSecret)

@@ -13,12 +13,17 @@ const jwt = require("jsonwebtoken");
 const schedule = require("node-schedule");
 const firestore = require("./services/firestore");
 const apiRoutes = require("./route/projectRoutes");
+const logRoutes = require("./route/logRoute");
 const googleStategy = require("./middleware/google-strategy");
 const jwtStategy = require("./middleware/jwt-strategy");
 const requireAuth = require("./middleware/requireAuth");
 const session = require("express-session");
 const User = require("./models/user");
 const db = firestore.db;
+const { WebSocketServer } = require("ws");
+
+// const server = http.createServer(app);
+// const wss = new WebSocketServer({ server });
 
 app.use(express.urlencoded({ extended: true }));
 
@@ -70,9 +75,7 @@ app.get(
       },
       "mysecret"
     );
-    res.redirect(
-      `https://timetrack.au-ki.com/auth/success?timetracker-token=${token}`
-    );
+    res.redirect(`http://localhost:3000/auth/success?token=${token}`);
   }
 );
 app.get("/failed", (req, res) => {
@@ -85,16 +88,18 @@ app.get("/api/validateToken", requireAuth(), (req, res) => {
 
 app.use("/api/webhook", webhookRouter);
 app.use("/api/project", apiRoutes);
-const duplicateJob = schedule.scheduleJob("26 18 * * *", async () => {
-  deleteDuplicateTask();
+app.use("/api/log", logRoutes);
+
+const duplicateJob = schedule.scheduleJob("34 22 * * *", async () => {
+  await deleteDuplicateTask();
 });
-const verifyJob = schedule.scheduleJob("26 18 * * *", async () => {
-  createTaskScheduler();
+const verifyJob = schedule.scheduleJob("34 22 * * *", async () => {
+  await createTaskScheduler();
 });
-const updateJob = schedule.scheduleJob("26 18 * * *", async () => {
-  updateScheduler();
+const updateJob = schedule.scheduleJob("34 22 * * *", async () => {
+  await updateScheduler();
 });
 
-const server = app.listen(8000, async () => {
+app.listen(8000, async () => {
   logger.log("info", "server running");
 });

@@ -23,10 +23,13 @@ const taskProcessingCache = {};
 
 exports.createTask = async (req, res) => {
   const requestBody = JSON.stringify(req.body);
+
   try {
     if (req.header("X-Hook-Secret")) {
       const xHookSecret = req.header("X-Hook-Secret");
       const requestUrl = req.url;
+      const pid = req.query.proejctGid;
+
       fs.readFile(
         path.join(__dirname, "..", "constants", "sectionCreateSecret.json"),
         (err, data) => {
@@ -39,7 +42,7 @@ exports.createTask = async (req, res) => {
               secretData = JSON.parse(data);
             }
 
-            secretData[requestUrl] = xHookSecret;
+            secretData[pid] = xHookSecret;
 
             fs.writeFile(
               path.join(
@@ -74,7 +77,7 @@ exports.createTask = async (req, res) => {
         )
       );
 
-      const xHookSecret = xHookSecrets[req.url];
+      const xHookSecret = xHookSecrets[req.query.proejctGid];
       if (xHookSecret) {
         const calculatedSignature = crypto
           .createHmac("sha256", xHookSecret)
@@ -143,6 +146,7 @@ exports.createTask = async (req, res) => {
                   PROJECTS
                 );
                 logger.log("info", `Executed ${i}st time`);
+                console.log("request data", requestData);
                 let ttResponse = await postTask(
                   requestData,
                   timetaskSecret[current_userName]

@@ -19,10 +19,11 @@ exports.createProjectInTT = async (req, res) => {
 
     if (projectExist) {
       logger.log("error", "project with the name exist");
-      res.send({
-        success: false,
-        data: `project with ${req.body.Name} already exist`,
-      });
+      res.write(
+        `error : project with the name ${req.body.Name} exist, please try again with different name`
+      );
+      res.end();
+
       return;
     }
     const clientID = parseInt(req.body.clientId);
@@ -53,6 +54,7 @@ exports.createProjectInTT = async (req, res) => {
     const response = await axios.request(config);
     if (response.data.status == "Created") {
       logger.log("info", "project created successfully");
+      res.write("project created in TT successfully");
       await createTeamInAsana(
         response.data.project.id,
         response.data.project.name,
@@ -60,12 +62,21 @@ exports.createProjectInTT = async (req, res) => {
       );
     } else {
       logger.log("info", "project creation failed");
+      res, write("error : project creation failed in TT ");
+      res.end();
     }
   } catch (error) {
     logger.log("error", error);
-    res.send({ success: false, data: error.message });
+    res.write(`error : ${error.message}`);
+    res.end();
   }
 };
+
+function delay(t, v) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, t, v);
+  });
+}
 
 const createTeamInAsana = async (tt_id, tt_name, res) => {
   const timetaskSecret = await loadAWSSecret("timetrack/api/asana");
@@ -91,13 +102,20 @@ const createTeamInAsana = async (tt_id, tt_name, res) => {
 
     if (response.statusText == "Created") {
       logger.log("info", "team created in asana successfully");
+      res.write("team created in asana successfully");
       const team_gid = response.data.data.gid;
       const team_name = response.data.data.name;
       await createProjectUnderATeam(tt_id, tt_name, team_gid, team_name, res);
+    } else {
+      res.write("error : team creation failed in asana");
+      res.write("error : please delete the project in TT and try again");
+      res.end();
     }
   } catch (error) {
     logger.log("error", error.response ? error.response.data : error.message);
-    res.send({ success: false, data: error.message });
+    res.write(`error : ${error.message}`);
+    res.write(`error : please delete the project in TT and try again`);
+    res.end();
   }
 };
 
@@ -130,17 +148,29 @@ const createProjectUnderATeam = async (
     );
     if (response.statusText == "Created") {
       logger.log("info", `new project created under the team ${team_name} `);
+      res.write("project created in asana successfully");
       await addProjectDetailsToDb(tt_id, tt_name, response.data.data.gid);
-      await createTask(response.data.data.gid);
-      await updateTask(response.data.data.gid);
-      res.send({
-        success: true,
-        data: "project added and webhook registered successfully",
-      });
+      await createTask(response.data.data.gid, res);
+      await updateTask(response.data.data.gid, res);
+      await delay(1000);
+      res.write(
+        "all activities completed successfully,please close the message box"
+      );
+      res.end();
+    } else {
+      res.write("error : project creation failed in asana");
+      res.write(
+        "error : please delete the newly created project in TT and Team in asana and try again "
+      );
+      res.end();
     }
   } catch (error) {
     logger.log("error", error.response ? error.response.data : error.message);
-    res.send({ success: false, data: error.message });
+    res.write(`error : ${error.message}`);
+    res.write(
+      "error : please delete the newly created project in TT and Team in asana and try again "
+    );
+    res.end();
   }
 };
 
@@ -150,8 +180,13 @@ const addProjectDetailsToDb = async (tt_id, tt_name, asanaProjectGid) => {
     const response = await docRef.update({
       [`PROJECTS.${tt_name}`]: tt_id,
     });
-  } catch (errr) {
+  } catch (error) {
     logger.log("error", error.message);
+    res.write(`error : ${error.message}`);
+    res.write(
+      "error : please delete the newly created project in TT and Team in asana and try again "
+    );
+    res.end();
   }
   try {
     const collectionRef = db.collection("asana_project_gid");
@@ -168,7 +203,11 @@ const addProjectDetailsToDb = async (tt_id, tt_name, asanaProjectGid) => {
     }
   } catch (error) {
     logger.log("error", error.message);
-    res.send({ success: false, data: error.message });
+    res.write(`error : ${error.message}`);
+    res.write(
+      "error : please delete the newly created project in TT and Team in asana and try again "
+    );
+    res.end();
   }
   try {
     const docRef = db
@@ -177,13 +216,17 @@ const addProjectDetailsToDb = async (tt_id, tt_name, asanaProjectGid) => {
     const response = await docRef.update({
       [`ttId_asanaId_map.${tt_id}`]: asanaProjectGid,
     });
-  } catch (errr) {
+  } catch (error) {
     logger.log("error", error.message);
-    res.send({ success: false, data: error.message });
+    res.write(`error : ${error.message}`);
+    res.write(
+      "error : please delete the newly created project in TT and Team in asana and try again "
+    );
+    res.end();
   }
 };
 
-const createTask = async (asana_project_gid) => {
+const createTask = async (asana_project_gid, res) => {
   try {
     const asanasecret = await loadAWSSecret("timetrack/api/asana");
     const apikey = asanasecret["PRABHATH PANICKER"];
@@ -205,21 +248,29 @@ const createTask = async (asana_project_gid) => {
       Authorization: apikey,
       "Content-Type": "application/json",
     };
-    axios
-      .post(asanaWebhookUrl, webhookData, { headers })
-      .then((response) => {
-        logger.log("info", "Webhook registration successful for create a task");
-      })
-      .catch((error) => {
-        logger.log("error", error.message);
-      });
+    const response = await axios.post(asanaWebhookUrl, webhookData, {
+      headers,
+    });
+    if (response.statusText == "Created") {
+      res.write("webhook registred successfully for creating the task");
+    } else {
+      res.write("error : webhook registration failed");
+      res.write(
+        "error : please delete the newly created project in TT and Team in asana and try again "
+      );
+      res.end();
+    }
   } catch (error) {
     logger.log("error", error.message);
-    res.send({ success: false, data: error.message });
+    res.write("webhook registration failed");
+    res.write(
+      "error : please delete the newly created project in TT and Team in asana and try again "
+    );
+    res.end();
   }
 };
 
-const updateTask = async (asana_project_gid) => {
+const updateTask = async (asana_project_gid, res) => {
   try {
     const asanasecret = await loadAWSSecret("timetrack/api/asana");
     const apikey = asanasecret["PRABHATH PANICKER"];
@@ -242,20 +293,25 @@ const updateTask = async (asana_project_gid) => {
       Authorization: apikey,
       "Content-Type": "application/json",
     };
-    axios
-      .post(asanaWebhookUrl, webhookData, { headers })
-      .then((response) => {
-        logger.log(
-          "info",
-          "Webhook registration successful for update the task"
-        );
-      })
-      .catch((error) => {
-        logger.log("error", error.message);
-      });
+    const response = await axios.post(asanaWebhookUrl, webhookData, {
+      headers,
+    });
+    if (response.statusText == "Created") {
+      res.write("webhook registred successfully for updating the task");
+    } else {
+      res.write("error : webhook registration failed");
+      res.write(
+        "error : please delete the newly created project in TT and Team in asana and try again "
+      );
+      res.end();
+    }
   } catch (error) {
     logger.log("error", error.message);
-    res.send({ success: false, data: error.message });
+    res.write("webhook registration failed");
+    res.write(
+      "error : please delete the newly created project in TT and Team in asana and try again "
+    );
+    res.end();
   }
 };
 

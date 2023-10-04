@@ -1,18 +1,27 @@
 const express = require("express");
 const router = express.Router();
+const requireAuth = require("../middleware/requireAuth");
 
 const projectController = require("../controller/projectController");
 
-router.post("/createProject", projectController.createProjectInTT);
+router.post(
+  "/createProject",
+  requireAuth(),
+  projectController.createProjectInTT
+);
 
-router.get("/getClients", projectController.getClients);
+router.get("/getClients", requireAuth(), projectController.getClients);
 
-router.get("/getTtProject", projectController.getAllProjects);
+router.get("/getTtProject", requireAuth(), projectController.getAllProjects);
 
-router.get("/getTTUsers", projectController.getUsersUnderProjectApi);
+router.get(
+  "/getTTUsers",
+  requireAuth(),
+  projectController.getUsersUnderProjectApi
+);
 
-router.get("/getAsanaUsers", projectController.getAsanaUsers);
+router.get("/getAsanaUsers", requireAuth(), projectController.getAsanaUsers);
 
-router.get("/syncUsers", projectController.syncUsers);
+router.get("/syncUsers", requireAuth(), projectController.syncUsers);
 
 module.exports = router;

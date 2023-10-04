@@ -9,7 +9,7 @@ exports.configureGoogleStrategy = () => {
         clientID:
           "959461062208-qkkmlkv46mm63ba8uo51nvcpflemt6bm.apps.googleusercontent.com",
         clientSecret: "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",
-        callbackURL: "https://timetrack.au-ki.com/api/google/callback",
+        callbackURL: "http://localhost:8000/api/google/callback",
         passReqToCallback: true,
       },
       async function (request, accessToken, refreshToken, profile, done) {
